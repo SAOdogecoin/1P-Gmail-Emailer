@@ -99,8 +99,31 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('amzInput').value = result.lastCopiedData;
       updateWithExtracted(result.lastCopiedData, result.lastExtractedPO);
     }
+
+    // New: Check for updates on load
+    checkForUpdates();
   });
 });
+
+const GITHUB_RAW = "https://raw.githubusercontent.com/SAOdogecoin/1P-Gmail-Emailer/main";
+
+async function checkForUpdates() {
+  try {
+    const res = await fetch(`${GITHUB_RAW}/manifest.json`, { cache: "no-store" });
+    const data = await res.json();
+    const localVersion = chrome.runtime.getManifest().version;
+    
+    if (data.version && data.version !== localVersion) {
+      const banner = document.getElementById('updateBanner');
+      banner.style.display = 'flex';
+      document.getElementById('runUpdateBtn').onclick = () => {
+        // Since we can't run the .bat directly, give instructions
+        alert("To update:\n1. Run 'update.bat' in your extension folder.\n2. Click the 'Reload' icon in chrome://extensions.");
+        chrome.tabs.create({ url: 'chrome://extensions' });
+      };
+    }
+  } catch (e) { console.log("Update check failed", e); }
+}
 
 function updateWithExtracted(text, prePO) {
     if (!text) return;
@@ -219,13 +242,38 @@ document.getElementById('openSettings').addEventListener('click', () => {
   renderSettings();
 });
 
-document.getElementById('syncGlobal').addEventListener('click', () => {
-  if (confirm("Reset local settings to match the latest global code defaults? ALL custom edits will be lost.")) {
-    chrome.storage.local.remove(['carrierSettings', 'templateSettings'], () => {
-      window.location.reload();
-    });
+document.getElementById('syncGlobal').addEventListener('click', async () => {
+  const btn = document.getElementById('syncGlobal');
+  const origHTML = btn.innerHTML;
+  
+  if (confirm("Reset local settings to match the latest global defaults from GitHub? ALL custom edits will be lost.")) {
+    btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>`;
+    
+    try {
+      const res = await fetch(`${GITHUB_RAW}/config.json`, { cache: "no-store" });
+      if (!res.ok) throw new Error("Fetch failed");
+      const data = await res.json();
+      
+      chrome.storage.local.set({ 
+        carrierSettings: data.carrierSettings, 
+        templateSettings: data.templateSettings 
+      }, () => {
+        window.location.reload();
+      });
+    } catch (e) {
+      console.error(e);
+      // Fallback to local defaults if offline
+      chrome.storage.local.remove(['carrierSettings', 'templateSettings'], () => {
+        window.location.reload();
+      });
+    }
   }
 });
+
+// Added spin animation for sync
+const style = document.createElement('style');
+style.textContent = `@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`;
+document.head.appendChild(style);
 
 document.getElementById('cancelSettings').addEventListener('click', () => {
   document.getElementById('settingsPage').style.display = 'none';

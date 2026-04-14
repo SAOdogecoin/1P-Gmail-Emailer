@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "1P Gmail Emailer",
-  "version": "1.5",
+  "version": "1.5.1",
   "description": "Automate Gmail emails for Amazon 1P Audits",
   "permissions": ["activeTab", "scripting", "storage", "tabs", "clipboardWrite"],
-  "host_permissions": ["*://mail.google.com/*", "*://vendorcentral.amazon.com/*"],
+  "host_permissions": ["*://mail.google.com/*", "*://vendorcentral.amazon.com/*", "https://raw.githubusercontent.com/*"],
   "background": {
     "service_worker": "background.js"
   },
