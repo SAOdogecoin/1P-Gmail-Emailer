@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "1P Gmail Emailer",
+  "version": "1.5",
+  "description": "Automate Gmail emails for Amazon 1P Audits",
+  "permissions": ["activeTab", "scripting", "storage", "tabs", "clipboardWrite"],
+  "host_permissions": ["*://mail.google.com/*", "*://vendorcentral.amazon.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://vendorcentral.amazon.com/*",
+        "*://vendorcentral.amazon.co.uk/*",
+        "*://vendorcentral.amazon.de/*",
+        "*://vendorcentral.amazon.fr/*",
+        "*://vendorcentral.amazon.it/*",
+        "*://vendorcentral.amazon.es/*",
+        "*://vendorcentral.amazon.ca/*",
+        "*://vendorcentral.amazon.com.mx/*"
+      ],
+      "js": ["content.js"]
+    }
+  ]
+}

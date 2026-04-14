@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>1P Gmail Emailer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --background: 0 0% 100%;
+      --foreground: 240 10% 3.9%;
+      --card: 0 0% 100%;
+      --primary: 240 5.9% 10%;
+      --primary-foreground: 0 0% 98%;
+      --muted: 240 4.8% 95.9%;
+      --muted-foreground: 240 3.8% 46.1%;
+      --accent: 240 4.8% 95.9%;
+      --accent-foreground: 240 5.9% 10%;
+      --destructive: 0 84.2% 60.2%;
+      --border: 240 5.9% 90%;
+      --input: 240 5.9% 90%;
+      --ring: 240 5% 64.9%;
+      --radius: 0.5rem;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 440px;
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: hsl(var(--background));
+      color: hsl(var(--foreground));
+      font-size: 0.875rem;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── HEADER ─────────────────────────────────────────── */
+    .header {
+      padding: 8px 14px;
+      border-bottom: 1px solid hsl(var(--border));
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: hsl(var(--card));
+    }
+
+    /* ── MAIN TABS — segmented control ──────────────────── */
+    .main-tabs {
+      display: flex;
+      background: hsl(var(--muted));
+      border-radius: 9999px;
+      padding: 3px;
+    }
+    .main-tab-btn {
+      padding: 4px 14px;
+      border: none;
+      background: transparent;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      color: hsl(var(--muted-foreground));
+      font-weight: 500;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.15s;
+    }
+    .main-tab-btn.active {
+      background: white;
+      color: hsl(var(--foreground));
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+    }
+
+    /* ── SETTINGS ICON ───────────────────────────────────── */
+    .settings-btn {
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 6px 8px;
+      border-radius: var(--radius);
+      color: hsl(var(--muted-foreground));
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      font-family: 'Inter', sans-serif;
+    }
+    .settings-btn:hover {
+      background: hsl(var(--accent));
+      color: hsl(var(--accent-foreground));
+    }
+
+    /* ── CONTAINER ───────────────────────────────────────── */
+    .container {
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* ── LABEL ───────────────────────────────────────────── */
+    .label {
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: hsl(var(--foreground));
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    /* ── TEXTAREA ────────────────────────────────────────── */
+    textarea {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid hsl(var(--input));
+      border-radius: var(--radius);
+      box-sizing: border-box;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.8125rem;
+      background: transparent;
+      color: hsl(var(--foreground));
+      resize: none;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      line-height: 1.5;
+    }
+    textarea:focus {
+      border-color: hsl(var(--ring));
+      box-shadow: 0 0 0 3px hsl(var(--ring) / 0.15);
+    }
+    textarea::placeholder { color: hsl(var(--muted-foreground)); }
+    textarea#amzInput     { height: 78px; }
+    textarea#followupInput { height: 108px; }
+
+    /* ── INFO / RESULT CARD ──────────────────────────────── */
+    .card {
+      background: hsl(var(--card));
+      border: 1px solid hsl(var(--border));
+      border-radius: var(--radius);
+      overflow: hidden;
+      display: none;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .card-row {
+      padding: 9px 14px;
+      border-bottom: 1px solid hsl(var(--border));
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .card-row:last-child { border-bottom: none; }
+    .data-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: hsl(var(--muted-foreground));
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .data-value {
+      font-size: 0.8125rem;
+      color: hsl(var(--foreground));
+      font-weight: 500;
+      text-align: right;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* ── CC EMAIL ROW ────────────────────────────────────── */
+    .cc-box {
+      padding: 9px 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      border-bottom: 1px solid hsl(var(--border));
+      transition: background 0.15s;
+      background: hsl(var(--muted));
+    }
+    .cc-box:hover { background: hsl(240 4.8% 91%); }
+    #ccEmailDisplay {
+      font-size: 0.8rem;
+      color: hsl(var(--foreground));
+      font-weight: 500;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* ── AMZX WARNING ────────────────────────────────────── */
+    .amz-box {
+      padding: 9px 14px;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      border-bottom: 1px solid hsl(38 92% 87%);
+      display: none;
+      align-items: center;
+      gap: 8px;
+      background: hsl(38 92% 95%);
+      color: hsl(25 95% 35%);
+    }
+
+    /* ── BUTTONS ─────────────────────────────────────────── */
+    .btn-primary {
+      width: 100%;
+      padding: 9px 16px;
+      background: hsl(var(--primary));
+      color: hsl(var(--primary-foreground));
+      border: none;
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      transition: opacity 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn-primary:hover:not(:disabled) { opacity: 0.88; }
+    .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .btn-secondary {
+      width: 100%;
+      padding: 9px 16px;
+      background: transparent;
+      color: hsl(var(--foreground));
+      border: 1px solid hsl(var(--border));
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      transition: background 0.15s;
+    }
+    .btn-secondary:hover { background: hsl(var(--accent)); }
+
+    /* ── ESTES TRACKING ──────────────────────────────────── */
+    .btn-tracking-pill {
+      display: none;
+      width: 100%;
+      padding: 8px 16px;
+      border-radius: var(--radius);
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      background: hsl(142 76% 95%);
+      color: hsl(142 72% 29%);
+      border: 1px solid hsl(142 60% 82%);
+      transition: background 0.15s;
+      font-family: 'Inter', sans-serif;
+    }
+    .btn-tracking-pill:hover { background: hsl(142 76% 90%); }
+
+    /* ── SETTINGS PAGE ───────────────────────────────────── */
+    #settingsPage { display: none; }
+
+    .settings-header-bar {
+      padding: 8px 14px;
+      border-bottom: 1px solid hsl(var(--border));
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: hsl(var(--card));
+    }
+    .settings-header-left { display: flex; align-items: center; gap: 4px; }
+    .settings-title { font-size: 0.75rem; font-weight: 600; color: hsl(var(--muted-foreground)); }
+    .settings-header-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+
+    .btn-back {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 6px 8px;
+      border-radius: var(--radius);
+      color: hsl(var(--muted-foreground));
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.15s;
+      font-size: 0.75rem;
+      font-weight: 500;
+      font-family: 'Inter', sans-serif;
+    }
+    .btn-back:hover { background: hsl(var(--accent)); color: hsl(var(--foreground)); }
+
+    .btn-sync {
+      background: transparent;
+      border: 1px solid hsl(var(--border));
+      color: hsl(var(--muted-foreground));
+      border-radius: var(--radius);
+      padding: 4px 8px;
+      font-size: 0.7rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s;
+    }
+    .btn-sync:hover {
+      background: hsl(var(--primary));
+      color: hsl(var(--primary-foreground));
+      border-color: hsl(var(--primary));
+    }
+
+    .settings-body { padding: 14px 16px; }
+
+    /* ── SETTINGS TABS — pill in header ──────────────────── */
+    .settings-tabs {
+      display: flex;
+      background: hsl(var(--muted));
+      border-radius: 9999px;
+      padding: 3px;
+    }
+    .settings-tab-btn {
+      padding: 4px 14px;
+      border: none;
+      background: transparent;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      color: hsl(var(--muted-foreground));
+      font-weight: 500;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.15s;
+    }
+    .settings-tab-btn.active {
+      background: white;
+      color: hsl(var(--foreground));
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+    }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* ── CARRIER ROWS ────────────────────────────────────── */
+    .settings-row { display: flex; gap: 6px; margin-bottom: 6px; }
+    .settings-row input {
+      padding: 7px 10px;
+      border: 1px solid hsl(var(--input));
+      border-radius: var(--radius);
+      font-size: 0.75rem;
+      outline: none;
+      font-family: 'Inter', sans-serif;
+      transition: border-color 0.15s;
+      background: transparent;
+      color: hsl(var(--foreground));
+    }
+    .settings-row input:focus { border-color: hsl(var(--ring)); }
+    .inp-name { width: 32%; }
+    .inp-email { flex: 1; }
+    .btn-del {
+      width: 30px;
+      flex-shrink: 0;
+      background: transparent;
+      border: 1px solid hsl(var(--border));
+      color: hsl(var(--muted-foreground));
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: 11px;
+      transition: all 0.15s;
+    }
+    .btn-del:hover {
+      background: hsl(0 84% 97%);
+      color: hsl(var(--destructive));
+      border-color: hsl(0 60% 85%);
+    }
+
+    #addCarrierBtn {
+      width: 100%;
+      margin-top: 8px;
+      padding: 8px;
+      background: transparent;
+      border: 1px dashed hsl(var(--border));
+      border-radius: var(--radius);
+      color: hsl(var(--muted-foreground));
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.15s;
+    }
+    #addCarrierBtn:hover {
+      background: hsl(var(--accent));
+      color: hsl(var(--foreground));
+      border-style: solid;
+    }
+
+    /* ── TEMPLATE EDITOR ─────────────────────────────────── */
+    .tpl-section-title {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: hsl(var(--muted-foreground));
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin: 16px 0 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid hsl(var(--border));
+    }
+    .tpl-row { margin-bottom: 10px; }
+    .tpl-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: hsl(var(--muted-foreground));
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 4px;
+      display: block;
+    }
+    textarea.tpl-input {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid hsl(var(--input));
+      border-radius: var(--radius);
+      font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 10px;
+      resize: vertical;
+      box-sizing: border-box;
+      min-height: 65px;
+      line-height: 1.5;
+      color: hsl(var(--foreground));
+      background: hsl(var(--muted));
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    textarea.tpl-input:focus {
+      border-color: hsl(var(--ring));
+      background: hsl(var(--background));
+    }
+    .tpl-vars {
+      font-size: 0.7rem;
+      color: hsl(var(--muted-foreground));
+      margin: 0 0 12px;
+      line-height: 1.7;
+      background: hsl(var(--muted));
+      padding: 8px 10px;
+      border-radius: var(--radius);
+      font-family: ui-monospace, monospace;
+    }
+
+    /* ── CARRIERS TOOLBAR ────────────────────────────────── */
+    .carriers-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .carriers-toolbar .label { margin-bottom: 0; }
+    .carriers-actions { display: flex; gap: 6px; }
+
+    .btn-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 12px;
+      border-radius: var(--radius);
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.15s;
+    }
+    .btn-toolbar-outline {
+      background: transparent;
+      border: 1px solid hsl(var(--border));
+      color: hsl(var(--foreground));
+    }
+    .btn-toolbar-outline:hover { background: hsl(var(--accent)); }
+    .btn-toolbar-primary {
+      background: hsl(var(--primary));
+      color: hsl(var(--primary-foreground));
+      border: none;
+    }
+    .btn-toolbar-primary:hover { opacity: 0.88; }
+
+    #saveMsg {
+      font-size: 0.75rem;
+      color: hsl(142 72% 29%);
+      font-weight: 500;
+      opacity: 0;
+      transition: opacity 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HOME VIEW -->
+  <div id="homePage">
+    <div class="header">
+      <div class="main-tabs">
+        <button class="main-tab-btn active" data-main-tab="email">Email</button>
+        <button class="main-tab-btn" data-main-tab="followup">Follow Up</button>
+      </div>
+      <button id="openSettings" class="settings-btn" title="Settings">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0 .33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+        <span>Settings</span>
+      </button>
+    </div>
+
+    <!-- EMAIL TAB -->
+    <div id="emailTabContent" class="main-tab-content">
+      <div class="container">
+        <div>
+          <span class="label">Amazon Shipment Data</span>
+          <textarea id="amzInput" placeholder="Paste raw text here..."></textarea>
+        </div>
+
+        <!-- Info Card -->
+        <div id="infoCard" class="card">
+
+          <!-- CC Email Row -->
+          <div id="ccBox" class="cc-box" title="Click to copy email">
+            <span style="font-size:0.7rem;font-weight:600;color:hsl(var(--muted-foreground));text-transform:uppercase;letter-spacing:0.05em;white-space:nowrap;flex-shrink:0;">To</span>
+            <span id="ccEmailDisplay"></span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;color:hsl(var(--muted-foreground))">
+              <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
+              <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
+            </svg>
+          </div>
+
+          <!-- AMZX Warning -->
+          <div id="amzBox" class="amz-box">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>
+              <line x1="12" x2="12" y1="9" y2="13"/>
+              <line x1="12" x2="12.01" y1="17" y2="17"/>
+            </svg>
+            Amazon Managed Carrier (AMZX)
+          </div>
+
+          <div class="card-row">
+            <span class="data-label">Subject</span>
+            <span id="subjectDisplay" class="data-value">—</span>
+          </div>
+          <div class="card-row">
+            <span class="data-label">Template</span>
+            <span id="templateTypeDisplay" class="data-value">—</span>
+          </div>
+        </div>
+
+        <button id="fillBtn" class="btn-primary" disabled>Auto-Fill Email</button>
+        <button id="estesTrackBtn" class="btn-tracking-pill">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:middle;margin-right:4px"><rect width="16" height="13" x="1" y="3" rx="2"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+          Track on Estes
+        </button>
+      </div>
+    </div>
+
+    <!-- FOLLOW UP TAB -->
+    <div id="followupTabContent" class="main-tab-content" style="display:none;">
+      <div class="container">
+        <div>
+          <span class="label">Paste Original BOL Request Email</span>
+          <textarea id="followupInput" placeholder="Paste the original email you sent..."></textarea>
+        </div>
+
+        <div id="followupCard" class="card">
+          <div class="card-row">
+            <span class="data-label">PO ID</span>
+            <span id="fu-poId" class="data-value">—</span>
+          </div>
+          <div class="card-row">
+            <span class="data-label">PRO Number</span>
+            <span id="fu-pro" class="data-value">—</span>
+          </div>
+          <div class="card-row">
+            <span class="data-label">Pickup Date</span>
+            <span id="fu-pickup" class="data-value">—</span>
+          </div>
+          <div class="card-row">
+            <span class="data-label">Ship From</span>
+            <span id="fu-shipFrom" class="data-value">—</span>
+          </div>
+          <div class="card-row">
+            <span class="data-label">Ship To</span>
+            <span id="fu-shipTo" class="data-value">—</span>
+          </div>
+        </div>
+
+        <button id="copyFollowupBtn" class="btn-primary" disabled>Copy Follow-Up Email</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SETTINGS VIEW -->
+  <div id="settingsPage">
+    <div class="settings-header-bar">
+      <div class="settings-header-left">
+        <button id="syncGlobal" class="btn-sync" title="Reset to code defaults" style="margin-right: 8px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+          Sync
+        </button>
+        <span class="settings-title">Settings</span>
+      </div>
+
+      <div class="settings-tabs">
+        <button class="settings-tab-btn active" data-tab="carriers">Carriers</button>
+        <button class="settings-tab-btn" data-tab="templates">Templates</button>
+      </div>
+
+      <div class="settings-header-right">
+        <div id="saveMsg" style="margin-right: 8px;">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </div>
+        <button id="cancelSettings" class="btn-back" title="Back">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          <span>Back</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="settings-body">
+      <!-- Carriers Tab -->
+      <div id="carriersTabContent" class="tab-content active">
+        <div class="carriers-toolbar">
+          <span class="label">Carrier Emails</span>
+          <div class="carriers-actions">
+            <button id="addCarrierBtn" class="btn-toolbar btn-toolbar-outline">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
+              Add
+            </button>
+          </div>
+        </div>
+        <div id="settingsList"></div>
+      </div>
+
+      <!-- Templates Tab -->
+      <div id="templatesTabContent" class="tab-content">
+        <div class="tpl-section-title">Email / Gmail Templates</div>
+        <p class="tpl-vars">{poId} {tracking} {carrier} {shipFrom} {shipTo} {asn} {arn} {docType} {pickedUpLine} {pickedUpDateLine}</p>
+        <div class="tpl-row"><span class="tpl-label">AMZX Case</span><textarea class="tpl-input" id="tpl-amzx"></textarea></div>
+        <div class="tpl-row"><span class="tpl-label">Central Transport (LTL)</span><textarea class="tpl-input" id="tpl-centralTransport"></textarea></div>
+        <div class="tpl-row"><span class="tpl-label">UPS / FedEx</span><textarea class="tpl-input" id="tpl-upsFedex"></textarea></div>
+        <div class="tpl-row"><span class="tpl-label">Small Parcel (Generic)</span><textarea class="tpl-input" id="tpl-smallParcel"></textarea></div>
+        <div class="tpl-row"><span class="tpl-label">Standard LTL (Generic)</span><textarea class="tpl-input" id="tpl-standardLtl"></textarea></div>
+        <div class="tpl-section-title">Follow-Up Template</div>
+        <p class="tpl-vars">{poId} {pro} {pickupLine} {shipFrom} {shipTo}</p>
+        <div class="tpl-row"><span class="tpl-label">BOL Follow-Up</span><textarea class="tpl-input" id="tpl-followup" style="min-height:110px;"></textarea></div>
+        <div class="tpl-section-title">Dispute Templates</div>
+        <div class="tpl-row"><span class="tpl-label">BOL / LTL</span><textarea class="tpl-input" id="tpl-disputeBol"></textarea></div>
+        <div class="tpl-row"><span class="tpl-label">POD / Small Parcel</span><textarea class="tpl-input" id="tpl-disputePod"></textarea></div>
+        <div class="tpl-row"><span class="tpl-label">No Attachment / SPD</span><textarea class="tpl-input" id="tpl-disputeSpd"></textarea></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
