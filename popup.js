@@ -99,31 +99,10 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('amzInput').value = result.lastCopiedData;
       updateWithExtracted(result.lastCopiedData, result.lastExtractedPO);
     }
-
-    // New: Check for updates on load
-    checkForUpdates();
   });
 });
 
 const GITHUB_RAW = "https://raw.githubusercontent.com/SAOdogecoin/1P-Gmail-Emailer/main";
-
-async function checkForUpdates() {
-  try {
-    const res = await fetch(`${GITHUB_RAW}/manifest.json`, { cache: "no-store" });
-    const data = await res.json();
-    const localVersion = chrome.runtime.getManifest().version;
-    
-    if (data.version && data.version !== localVersion) {
-      const banner = document.getElementById('updateBanner');
-      banner.style.display = 'flex';
-      document.getElementById('runUpdateBtn').onclick = () => {
-        // Since we can't run the .bat directly, give instructions
-        alert("To update:\n1. Run 'update.bat' in your extension folder.\n2. Click the 'Reload' icon in chrome://extensions.");
-        chrome.tabs.create({ url: 'chrome://extensions' });
-      };
-    }
-  } catch (e) { console.log("Update check failed", e); }
-}
 
 function updateWithExtracted(text, prePO) {
     if (!text) return;

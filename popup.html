@@ -488,41 +488,9 @@
       align-items: center;
       gap: 4px;
     }
-
-    /* ── UPDATE BANNER ─────────────────────────────────── */
-    .update-banner {
-      display: none;
-      background: hsl(221 83% 53%);
-      color: white;
-      padding: 8px 12px;
-      font-size: 0.75rem;
-      font-weight: 500;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      animation: slideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-    @keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
-    .update-btn {
-      background: white;
-      color: hsl(221 83% 53%);
-      border: none;
-      padding: 4px 10px;
-      border-radius: 999px;
-      font-size: 0.7rem;
-      font-weight: 600;
-      cursor: pointer;
-      white-space: nowrap;
-    }
   </style>
 </head>
 <body>
-
-  <!-- UPDATE NOTIFICATION -->
-  <div id="updateBanner" class="update-banner">
-    <span>New version available!</span>
-    <button id="runUpdateBtn" class="update-btn">Update Now</button>
-  </div>
 
   <!-- HOME VIEW -->
   <div id="homePage">
