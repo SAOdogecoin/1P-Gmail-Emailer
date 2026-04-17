@@ -21,14 +21,18 @@
         clearTimeout(autoExtractTimer);
         autoExtractTimer = setTimeout(() => {
             try { chrome.runtime && chrome.runtime.id; } catch(e) { return; }
-            const plainText = document.body.innerText;
-            const asnMatch = url.match(/asn=(\d+)/i);
-            const currentAsn = asnMatch ? asnMatch[1] : null;
-            chrome.runtime.sendMessage({
-                action: "processAmazonData",
-                text: plainText,
-                extractedPO: extractPOFromDetail(),
-                asn: currentAsn
+            // Skip if this tab was opened as part of a bulk "Open POs" batch
+            chrome.storage.local.get(['bulkOpenUntil'], (res) => {
+                if (res.bulkOpenUntil && Date.now() < res.bulkOpenUntil) return;
+                const plainText = document.body.innerText;
+                const asnMatch = url.match(/asn=(\d+)/i);
+                const currentAsn = asnMatch ? asnMatch[1] : null;
+                chrome.runtime.sendMessage({
+                    action: "processAmazonData",
+                    text: plainText,
+                    extractedPO: extractPOFromDetail(),
+                    asn: currentAsn
+                });
             });
         }, 2500); // wait for SPA content to fully render
     }
@@ -334,7 +338,9 @@
             chrome.storage.local.get(['asnMappings'], (result) => {
                 const mappings = result.asnMappings || {};
                 asns.forEach(asn => { mappings[asn] = poId; });
-                chrome.storage.local.set({ asnMappings: mappings, lastExtractedPO: poId }, () => {
+                // Suppress auto-extract on all tabs opened in bulk (30s window)
+                const bulkOpenUntil = asns.length > 1 ? Date.now() + 30000 : 0;
+                chrome.storage.local.set({ asnMappings: mappings, lastExtractedPO: poId, bulkOpenUntil }, () => {
                     asns.forEach((asn, index) => {
                         setTimeout(() => {
                             window.open(`${window.location.origin}/kt/vendor/members/afi-shipment-mgr/shipmentdetail?asn=${asn}`, '_blank');
