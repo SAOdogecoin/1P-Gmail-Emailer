@@ -78,6 +78,63 @@ let currentSubject = "";
 let currentBody = "";
 let currentEmail = "";
 let isAmzCase = false;
+let lastAutoTrigger = 0;
+
+function autoTrigger() {
+  const now = Date.now();
+  if (now - lastAutoTrigger < 3000) return; // debounce — avoid double-fire
+  lastAutoTrigger = now;
+
+  if (isAmzCase) {
+    // Copy case text, then open/focus vendor central contact tab
+    navigator.clipboard.writeText(currentBody).catch(() => copyTextSync(currentBody));
+    chrome.tabs.query({ url: "*://vendorcentral.amazon.com/hz/vendor/members/contact*" }, (tabs) => {
+      if (tabs.length > 0) {
+        const tab = tabs[0];
+        chrome.windows.update(tab.windowId, { focused: true });
+        chrome.tabs.update(tab.id, { active: true }, () => {
+          chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: fillAmazonContactForm,
+            args: [currentBody]
+          });
+        });
+      } else {
+        chrome.tabs.create({ url: "https://vendorcentral.amazon.com/hz/vendor/members/contact" });
+      }
+    });
+  } else if (currentEmail && currentEmail !== "N/A") {
+    // Known carrier — auto-fill Gmail draft
+    chrome.tabs.query({ url: "*://mail.google.com/*" }, (tabs) => {
+      if (tabs.length > 0) {
+        const gmailTab = tabs[0];
+        chrome.windows.update(gmailTab.windowId, { focused: true });
+        chrome.tabs.update(gmailTab.id, { active: true }, () => {
+          chrome.scripting.executeScript({
+            target: { tabId: gmailTab.id },
+            func: fillGmail,
+            args: [currentSubject, currentBody, currentEmail]
+          });
+        });
+      } else {
+        chrome.tabs.create({ url: "https://mail.google.com/" }, (newTab) => {
+          const checkStatus = setInterval(() => {
+            chrome.tabs.get(newTab.id, (tab) => {
+              if (tab && tab.status === 'complete') {
+                clearInterval(checkStatus);
+                chrome.scripting.executeScript({
+                  target: { tabId: newTab.id },
+                  func: fillGmail,
+                  args: [currentSubject, currentBody, currentEmail]
+                });
+              }
+            });
+          }, 1000);
+        });
+      }
+    });
+  }
+}
 
 // --- INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -117,6 +174,7 @@ chrome.storage.onChanged.addListener((changes) => {
         chrome.storage.local.get(['lastCopiedData', 'lastExtractedPO'], (res) => {
             document.getElementById('amzInput').value = res.lastCopiedData || "";
             updateWithExtracted(res.lastCopiedData, res.lastExtractedPO);
+            autoTrigger();
         });
     }
 });
@@ -414,6 +472,7 @@ document.getElementById('amzInput').addEventListener('input', () => {
 
   const parsed = parseAmazonData(text); // Manual edits won't have pre-extracted PO
   updateUI(parsed);
+  autoTrigger();
 });
 
 // Copy Email Handler
