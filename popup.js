@@ -86,8 +86,9 @@ function autoTrigger() {
   lastAutoTrigger = now;
 
   if (isAmzCase) {
-    // Copy case text, then open/focus vendor central contact tab
+    // Copy case text + show feedback on button
     navigator.clipboard.writeText(currentBody).catch(() => copyTextSync(currentBody));
+    setBtn("✅ Copied!", "#1e8e3e", 2000);
     chrome.tabs.query({ url: "*://vendorcentral.amazon.com/hz/vendor/members/contact*" }, (tabs) => {
       if (tabs.length > 0) {
         const tab = tabs[0];
