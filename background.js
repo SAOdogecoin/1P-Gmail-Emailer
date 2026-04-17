@@ -42,33 +42,85 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             const data = parseAmazonData(message.text, db, finalPO);
 
             if (data.isAmz && sender.tab) {
-                // Always copy to clipboard on the source tab
                 chrome.scripting.executeScript({
                     target: { tabId: sender.tab.id },
                     func: (bodyText) => navigator.clipboard.writeText(bodyText),
                     args: [data.body]
                 });
-
-                // Also auto-fill contact form if it's already open
-                chrome.tabs.query({ url: "*://vendorcentral.amazon.com/hz/vendor/members/contact*" }, (tabs) => {
-                    if (tabs.length > 0) {
-                        chrome.scripting.executeScript({
-                            target: { tabId: tabs[0].id },
-                            func: fillAmazonContactFormBg,
-                            args: [data.body]
-                        });
-                    }
-                });
-
-                sendResponse({ isAmz: true, isEstes: data.isEstes, tracking: data.tracking });
-            } else {
-                automateGmailCompose(data);
-                sendResponse({ isAmz: false, isEstes: data.isEstes, tracking: data.tracking });
             }
+
+            routeAction(data);
+            sendResponse({ isAmz: data.isAmz, isEstes: data.isEstes, isUps: data.isUps, tracking: data.tracking });
         });
-        return true; // keep channel open for async sendResponse
+        return true;
+    }
+    if (message.action === "autoAct") {
+        routeAction(message.data);
+        sendResponse({ ok: true });
+        return true;
     }
 });
+
+function routeAction(data) {
+    if (data.isAmz) {
+        focusOrOpenContactTab(data.body);
+    } else if (data.isEstes && data.tracking && data.tracking !== "N/A") {
+        chrome.tabs.create({ url: `https://www.estes-express.com/myestes/shipment-tracking/?query=${data.tracking}&type=PRO` });
+    } else if (data.isUps && data.tracking && data.tracking !== "N/A") {
+        chrome.tabs.create({ url: `https://www.ups.com/track?loc=en_US&tracknum=${data.tracking}` }, (newTab) => {
+            // Wait for page to load, then click POD link if present
+            const poll = setInterval(() => {
+                chrome.tabs.get(newTab.id, (tab) => {
+                    if (!tab) { clearInterval(poll); return; }
+                    if (tab.status === 'complete') {
+                        clearInterval(poll);
+                        setTimeout(() => {
+                            chrome.scripting.executeScript({
+                                target: { tabId: newTab.id },
+                                func: clickUpsPod
+                            }).catch(() => {});
+                        }, 2500);
+                    }
+                });
+            }, 500);
+        });
+    } else if (data.email && data.email !== "N/A") {
+        automateGmailCompose(data);
+    }
+}
+
+function focusOrOpenContactTab(bodyText) {
+    chrome.tabs.query({ url: "*://vendorcentral.amazon.com/hz/vendor/members/contact*" }, (tabs) => {
+        if (tabs.length > 0) {
+            const tab = tabs[0];
+            chrome.windows.update(tab.windowId, { focused: true }, () => {
+                chrome.tabs.update(tab.id, { active: true }, () => {
+                    chrome.scripting.executeScript({
+                        target: { tabId: tab.id },
+                        func: fillAmazonContactFormBg,
+                        args: [bodyText]
+                    }).catch(() => {});
+                });
+            });
+        } else {
+            chrome.tabs.create({ url: "https://vendorcentral.amazon.com/hz/vendor/members/contact" });
+        }
+    });
+}
+
+// Injected into UPS tracking page to auto-click the Proof of Delivery link
+function clickUpsPod() {
+    let attempts = 0;
+    const poll = setInterval(() => {
+        const el = document.getElementById('stApp_btnProofOfDeliveryonDetails')
+            || Array.from(document.querySelectorAll('a.ups-link')).find(a => /proof of delivery/i.test(a.innerText));
+        if (el) {
+            clearInterval(poll);
+            el.click();
+        }
+        if (++attempts > 30) clearInterval(poll); // ~15s timeout
+    }, 500);
+}
 
 function automateGmailCompose(data) {
     chrome.tabs.query({ url: "*://mail.google.com/*" }, (tabs) => {
@@ -176,7 +228,9 @@ function parseAmazonData(text, db, prePickedPO) {
   const getVal = (r) => { const m = text.match(r); return m && m[1] ? m[1].trim() : "N/A"; };
   
   const carrierRaw = (getVal(/Carrier:\s*\n(.+)/) || getVal(/Carrier:\s*(.+)/)).trim();
-  const tracking = getVal(/Carrier tracking.*PRO.*:\s*\n?([A-Z0-9]+)/i);
+  let tracking = getVal(/Carrier tracking.*PRO.*:\s*\n?([A-Z0-9]+)/i);
+  if (tracking === "N/A") tracking = getVal(/Carrier tracking[^:\n]*:\s*\n?([A-Z0-9]+)/i);
+  if (tracking === "N/A") tracking = getVal(/Tracking[^:\n]*(?:number|#|ID)[^:\n]*:\s*\n?([A-Z0-9]+)/i);
   const mode = getVal(/Mode:\s*\n?(.+)/);
   const poMatch = text.match(/\bPurchase order\b[\s\S]{0,1000}?\b([A-Z0-9]*\d[A-Z0-9]{6,11})\b/i);
   let poId = prePickedPO || (poMatch ? poMatch[1] : "N/A");
@@ -230,6 +284,7 @@ function parseAmazonData(text, db, prePickedPO) {
   }
 
   const isEstes = carrierUpper.includes("ESTES") || carrierUpper.includes("EXLA");
+  const isUps = carrierUpper.includes("UPS") || carrierUpper.includes("UPSN");
 
-  return { isAmz, isEstes, tracking, email, subject, body, poId };
+  return { isAmz, isEstes, isUps, tracking, email, subject, body, poId };
 }
