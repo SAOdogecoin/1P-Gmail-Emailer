@@ -85,7 +85,7 @@ let lastAutoTrigger = 0;
 
 function autoTrigger() {
   const now = Date.now();
-  if (now - lastAutoTrigger < 3000) return; // debounce — avoid double-fire
+  if (now - lastAutoTrigger < 1000) return; // debounce — avoid double-fire from paste+storage
   lastAutoTrigger = now;
 
   if (isAmzCase) {
@@ -634,7 +634,9 @@ function parseAmazonData(text, prePickedPO) {
   
   // Data Extraction
   let carrierRaw = (getVal(/Carrier:\s*\n(.+)/) || getVal(/Carrier:\s*(.+)/)).trim();
-  const tracking = getVal(/Carrier tracking.*PRO.*:\s*\n?([A-Z0-9]+)/i);
+  const tracking = getVal(/Carrier tracking.*PRO.*:\s*\n?([A-Z0-9]+)/i)
+    || getVal(/Carrier tracking[^:\n]*:\s*\n?([A-Z0-9]+)/i)
+    || getVal(/Tracking[^:\n]*(?:number|#|ID)[^:\n]*:\s*\n?([A-Z0-9]+)/i);
   const mode = getVal(/Mode:\s*\n?(.+)/);
   const poMatch = text.match(/\bPurchase order\b[\s\S]{0,1000}?\b([A-Z0-9]*\d[A-Z0-9]{6,11})\b/i);
   const poId = prePickedPO || (poMatch ? poMatch[1] : "N/A");
@@ -720,7 +722,7 @@ function parseAmazonData(text, prePickedPO) {
   body = body.replace(/’/g, "'").replace(/[“”]/g, '"');
 
   const isEstes = carrierUpper.includes("ESTES") || carrierUpper.includes("EXLA");
-  const isUps = (carrierUpper.includes("UPS") || carrierUpper.includes("UPSN")) && !carrierUpper.includes("FREIGHT");
+  const isUps = carrierUpper.includes("UPS") || carrierUpper.includes("UPSN");
 
   return { isAmz, email, subject, body, templateType, isEstes, isUps, tracking };
 }
