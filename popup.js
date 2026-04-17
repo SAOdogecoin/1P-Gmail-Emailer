@@ -78,6 +78,9 @@ let currentSubject = "";
 let currentBody = "";
 let currentEmail = "";
 let isAmzCase = false;
+let isEstesCase = false;
+let isUpsCase = false;
+let currentTracking = "";
 let lastAutoTrigger = 0;
 
 function autoTrigger() {
@@ -104,6 +107,12 @@ function autoTrigger() {
         chrome.tabs.create({ url: "https://vendorcentral.amazon.com/hz/vendor/members/contact" });
       }
     });
+  } else if (isEstesCase && currentTracking && currentTracking !== "N/A") {
+    // Estes — auto-open tracking in new tab, no email
+    chrome.tabs.create({ url: `https://www.estes-express.com/myestes/shipment-tracking/?query=${currentTracking}&type=PRO` });
+  } else if (isUpsCase && currentTracking && currentTracking !== "N/A") {
+    // UPS — auto-open tracking in new tab, no email
+    chrome.tabs.create({ url: `https://www.ups.com/track?loc=en_US&tracknum=${currentTracking}` });
   } else if (currentEmail && currentEmail !== "N/A") {
     // Known carrier — auto-fill Gmail draft
     chrome.tabs.query({ url: "*://mail.google.com/*" }, (tabs) => {
@@ -586,7 +595,10 @@ function updateUI(data) {
   currentSubject = data.subject;
   currentBody = data.body;
   currentEmail = data.email;
+  currentTracking = data.tracking;
   isAmzCase = data.isAmz;
+  isEstesCase = data.isEstes;
+  isUpsCase = data.isUps;
 
   infoCard.style.display = 'block';
 
@@ -708,8 +720,9 @@ function parseAmazonData(text, prePickedPO) {
   body = body.replace(/’/g, "'").replace(/[“”]/g, '"');
 
   const isEstes = carrierUpper.includes("ESTES") || carrierUpper.includes("EXLA");
+  const isUps = (carrierUpper.includes("UPS") || carrierUpper.includes("UPSN")) && !carrierUpper.includes("FREIGHT");
 
-  return { isAmz, email, subject, body, templateType, isEstes, tracking };
+  return { isAmz, email, subject, body, templateType, isEstes, isUps, tracking };
 }
 
 // Utility: Copy Visual Feedback
