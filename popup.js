@@ -152,10 +152,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Restore last active main tab
     if (result.lastMainTab) switchMainTab(result.lastMainTab);
 
-    // Reload last copied data
+    // Reload last copied data and auto-trigger if carrier is known
     if (result.lastCopiedData) {
       document.getElementById('amzInput').value = result.lastCopiedData;
       updateWithExtracted(result.lastCopiedData, result.lastExtractedPO);
+      autoTrigger();
     }
   });
 });

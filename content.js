@@ -10,6 +10,29 @@
     const QUEUE_PATH = '/afi-shipment-mgr/shippingqueue';
     const DISPUTES_PATH = '/disputes';
 
+    let lastAutoExtractedUrl = '';
+    let autoExtractTimer = null;
+
+    function autoExtractAndSave() {
+        const url = window.location.href;
+        if (url === lastAutoExtractedUrl) return;
+        lastAutoExtractedUrl = url;
+
+        clearTimeout(autoExtractTimer);
+        autoExtractTimer = setTimeout(() => {
+            try { chrome.runtime && chrome.runtime.id; } catch(e) { return; }
+            const plainText = document.body.innerText;
+            const asnMatch = url.match(/asn=(\d+)/i);
+            const currentAsn = asnMatch ? asnMatch[1] : null;
+            chrome.runtime.sendMessage({
+                action: "processAmazonData",
+                text: plainText,
+                extractedPO: extractPOFromDetail(),
+                asn: currentAsn
+            });
+        }, 2500); // wait for SPA content to fully render
+    }
+
     const DISPUTE_DEFAULTS = {
         disputeBol: `Hi,\n\nWe've verified the shipment and confirmed a receipt shortage for PO ID: {poId}\n\nCould you please process a credit for the corresponding invoice to reflect this shortage?\n\nSee attached copy of the signed BOL as your reference confirming that the units were successfully delivered by the carrier.\n\nThanks!`,
         disputePod: `Hi,\n\nWe've verified the shipment and confirmed a receipt shortage for PO ID: {poId}\n\nCould you please process a credit for the corresponding invoice to reflect this shortage?\n\nSee attached copy of the POD as your reference confirming that the units were successfully delivered by the carrier.\n\nThanks!`,
@@ -27,6 +50,7 @@
             autoHighlightPO();
             checkEstesOnPage();
             checkUPSOnPage();
+            autoExtractAndSave();
         }
 
         const isDisputes = url.includes(DISPUTES_PATH) && url.includes('/create');
