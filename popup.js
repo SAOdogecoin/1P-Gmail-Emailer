@@ -60,14 +60,15 @@ const DEFAULT_DB = {
 // --- DEFAULT TEMPLATES ---
 const DEFAULT_TEMPLATES = {
   amzx: `Hi Amazon Freight Support Team,\n\nWe are requesting for the signed BOL for PO ID {poId}. We require this documentation to investigate a shortage.\n\nAssociated ASN/ARN: {asn} / {arn}\n\nPlease provide a high-resolution copy of the BOL (Bill of Lading) indicating the Amazon stamp and/or the receiver's signature confirming the pallet/unit count.\n\nNote: This is an AMZX shipment, hence please do not advise us to contact the carrier directly since the shipment page instructs us to create a case for delivery-related issues.\n\n"This shipment has been assigned to an Amazon-managed carrier. For assistance, go to Support and select Contact us, select Shipments, and then select the relevant issue type."\n\nThanks.`,
-  centralTransport: `Hi,\n\nWe are requesting the signed BOL for PO ID {poId}. We require this documentation to investigate a shortage claim.\n\nCarrier tracking or PRO number: {tracking}{pickedUpLine}\nShip to: {shipTo}\nShip from: {shipFrom}\n\nPlease provide a high-resolution copy of the BOL (Bill of Lading) indicating the Amazon stamp and/or the receiver's signature confirming the pallet/unit count.\n\nThank you.`,
+  centralTransport: `Hi,\n\nWe are requesting for the signed BOL for PO ID {poId}. We require this documentation to investigate a shortage claim.\n\n\nPRO number: {tracking}{pickedUpLine}\nShip from: {shipFrom}\nShip to: {shipTo}\n\n\nPlease provide a high-resolution copy of the signed BOL (Bill of Lading) indicating the Amazon stamp and/or the receiver's signature confirming the pallet/unit count.\n\nThank you.`,
   upsFedex: `Hi {carrier} Support Team,\n\nWe are writing to request a formal Proof of Delivery (POD) for a shipment that is no longer appearing in the active tracking system. Because the tracking has expired, we are unable to download the documentation via the standard carrier portal.\n\nShipment Information:\nTracking Number: {tracking}\nShip from Address: {shipFrom}\nShip to Address: {shipTo}\n\nFor shortage claim purposes, we need a copy of the delivery record, specifically showing the weight of the package, delivery address, date/time, and the signature/name of the individual who accepted the package.\n\nThank you for your assistance in locating this archived record.`,
   smallParcel: `Hi {carrier} Support Team,\n\nWe are writing to request a formal Proof of Delivery (POD) for a shipment that is no longer appearing in the active tracking system. Because the tracking has expired, we are unable to download the documentation via the standard carrier portal.\n\nShipment Information:\nTracking Number: {tracking}\nShipper Address: {shipFrom}\nRecipient Address: {shipTo}\n\nFor shortage claim purposes, we need a copy of the delivery record, specifically showing the delivery address, date/time, and the signature/name of the individual who accepted the package.\n\nThank you for your assistance in locating this archived record.`,
-  standardLtl: `Hi,\n\nWe are requesting for the signed BOL for PO ID {poId}. We require this documentation to investigate a shortage claim.\n\nPRO number: {tracking}{pickedUpDateLine}\nShip from: {shipFrom}\nShip to: {shipTo}\n\nPlease provide a high-resolution copy of the signed BOL (Bill of Lading) indicating the Amazon stamp and/or the receiver's signature confirming the pallet/unit count.\n\nThank you.`,
+  standardLtl: `Hi,\n\nWe are requesting for the signed BOL for PO ID {poId}. We require this documentation to investigate a shortage claim.\n\n\nPRO number: {tracking}{pickedUpDateLine}\nShip from: {shipFrom}\nShip to: {shipTo}\n\n\nPlease provide a high-resolution copy of the signed BOL (Bill of Lading) indicating the Amazon stamp and/or the receiver's signature confirming the pallet/unit count.\n\nThank you.`,
   disputeBol: `Hi,\n\nWe've verified the shipment and confirmed a receipt shortage for PO ID: {poId}\n\nCould you please process a credit for the corresponding invoice to reflect this shortage?\n\nSee attached copy of the signed BOL as your reference confirming that the units were successfully delivered by the carrier.\n\nThanks!`,
   disputePod: `Hi,\n\nWe've verified the shipment and confirmed a receipt shortage for PO ID: {poId}\n\nCould you please process a credit for the corresponding invoice to reflect this shortage?\n\nSee attached copy of the POD as your reference confirming that the units were successfully delivered by the carrier.\n\nThanks!`,
   disputeSpd: `Hi,\n\nWe've verified the shipment and confirmed a receipt shortage for PO ID: {poId}\n\nCould you please process a credit for the corresponding invoice to reflect this shortage?\n\nThanks!`,
-  followup: `Hi,\n\nGood day!\n\nWe\'re following up on the request regarding the signed Bill of Lading (BOL) for PO {poId}. We have yet to receive the documentation, and this is now becoming urgent as we need to resolve an active shortage claim.\n\nAs a reminder, we require a high-resolution copy that clearly shows:\nThe Amazon stamp and/or the receiver\'s signature.\nThe confirmed pallet/unit count at the time of delivery.\n\nShipment Details:\n\nPRO Number: {pro}{pickupLine}\nShip From: {shipFrom}\nShip To: {shipTo}\n\nCould you please provide an update on the status of this document request?\n\nThank you for your prompt assistance.\n\nBest regards,`
+  followup: `Hi,\n\nGood day!\n\nWe\'re following up on the request regarding the signed Bill of Lading (BOL) for PO {poId}. We have yet to receive the documentation, and this is now becoming urgent as we need to resolve an active shortage claim.\n\nAs a reminder, we require a high-resolution copy that clearly shows:\nThe Amazon stamp and/or the receiver\'s signature.\nThe confirmed pallet/unit count at the time of delivery.\n\nShipment Details:\n\nPRO Number: {pro}{pickupLine}\nShip From: {shipFrom}\nShip To: {shipTo}\n\nCould you please provide an update on the status of this document request?\n\nThank you for your prompt assistance.\n\nBest regards,`,
+  followupPod: `Hi,\n\nGood day!\n\nWe\'re following up on the request regarding the Proof of Delivery (POD) for PO {poId}. We have yet to receive the documentation, and this is now becoming urgent as we need to resolve an active shortage claim.\n\nAs a reminder, we require a delivery record that clearly shows:\n- The delivery address\n- Date and time of delivery\n- The signature or name of the individual who accepted the package.\n\nShipment Information:\n\nTracking Number: {pro}\nShipper Address: {shipFrom}\nRecipient Address: {shipTo}\n\nCould you please provide an update on the status of this document request?\n\nThank you for your prompt assistance.\n\nBest regards,`
 };
 
 // --- GLOBAL VARIABLES ---
@@ -156,8 +157,26 @@ document.getElementById('followupInput').addEventListener('input', () => {
   }
   document.getElementById('fu-shipFrom').innerText = parsed.shipFrom;
   document.getElementById('fu-shipTo').innerText = parsed.shipTo;
+  
+  // Auto-switch the UI toggle based on detection
+  document.querySelectorAll('.fu-type-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.fuType === parsed.type);
+  });
+
   document.getElementById('followupCard').style.display = 'block';
   document.getElementById('copyFollowupBtn').disabled = false;
+});
+
+// Follow-up type switching
+document.querySelectorAll('.fu-type-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.fu-type-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    // Re-trigger the preview if there's input
+    if (document.getElementById('followupInput').value.trim()) {
+      document.getElementById('followupInput').dispatchEvent(new Event('input'));
+    }
+  });
 });
 
 document.getElementById('copyFollowupBtn').addEventListener('click', () => {
@@ -192,26 +211,54 @@ function parseOriginalBolEmail(text) {
   };
 
   // PO ID — "PO ID XXXXXXXX" or "PO XXXXXXXX"
-  const poMatch = text.match(/PO\s*(?:ID)?\s*:?\s*([A-Z0-9]{6,12})/i);
+  const poMatch = text.match(/PO\s*(?:ID)?\s*[:\s#]*([A-Z0-9]{6,12})/i);
   const poId = poMatch ? poMatch[1].trim() : 'N/A';
 
-  // PRO — handles: "PRO number:", "PRO#:", "PRO No.:", "PRO:"
-  const pro = findValue(/PRO\s*(?:number|no\.?|#)?\s*[:\s#]\s*(.*)/i);
-
+  // PRO / Tracking Number
+  // Priority order: "Tracking Number:", "PRO number:", "PRO:", "Tracking:"
+  // We use a more specific regex to avoid matching "active tracking system"
+  const pro = findValue(/(?:Tracking\s*Number|PRO\s*number|PRO|Tracking)\s*[:]\s*(.*)/i);
+  
   // Pickup date
-  const pickup = findValue(/Picked\s*up\s*[:\s]+(.*)/i);
+  const pickup = findValue(/(?:Picked\s*up|Ship\s*date)\s*(?:date)?\s*[:\s]*(.*)/i);
 
-  // Ship from / Ship to — value may be inline or on next line
-  const shipFrom = findValue(/Ship\s*from\s*[:\s]*(.*)/i);
-  const shipTo   = findValue(/Ship\s*to\s*[:\s]*(.*)/i);
+  // Ship from / Shipper
+  const shipFrom = findValue(/(?:Ship\s*from|Shipper)\s*(?:Address)?\s*[:\s]*(.*)/i);
+  
+  // Ship to / Recipient
+  const shipTo   = findValue(/(?:Ship\s*to|Recipient)\s*(?:Address)?\s*[:\s]*(.*)/i);
 
-  return { poId, pro, pickup, shipFrom, shipTo };
+  // Carrier
+  const carrier  = findValue(/Carrier\s*[:\s]*(.*)/i);
+
+  // Auto-detect type
+  let type = 'bol';
+  const textUpper = text.toUpperCase();
+  // Better detection: look for "Tracking Number" specifically as a label
+  if (textUpper.includes('TRACKING NUMBER:') || textUpper.includes('SHIPPER ADDRESS:') || textUpper.includes('RECIPIENT ADDRESS:')) {
+    type = 'pod';
+  } else if (textUpper.includes('PRO NUMBER:') || textUpper.includes('BOL REQUEST')) {
+    type = 'bol';
+  }
+  
+  return { poId, pro, pickup, shipFrom, shipTo, carrier, type };
 }
 
-function buildFollowupEmail({ poId, pro, pickup, shipFrom, shipTo }) {
+function buildFollowupEmail({ poId, pro, pickup, shipFrom, shipTo, carrier }) {
   const pickupLine = pickup !== 'N/A' ? `\nPickup Date: ${pickup}` : '';
-  const vars = { poId, pro, pickupLine, shipFrom, shipTo };
-  return fillTemplate(activeTemplates.followup || DEFAULT_TEMPLATES.followup, vars);
+  
+  // If PO is N/A, make it blank as requested
+  const cleanPO = poId === 'N/A' ? '' : poId;
+  const cleanPro = pro === 'N/A' ? '' : pro;
+
+  const vars = { poId: cleanPO, pro: cleanPro, pickupLine, shipFrom, shipTo, carrier };
+  
+  // Determine which template to use (BOL or POD)
+  const activeBtn = document.querySelector('.fu-type-btn.active');
+  const type = activeBtn ? activeBtn.dataset.fuType : 'bol';
+  const tplKey = type === 'pod' ? 'followupPod' : 'followup';
+  
+  return fillTemplate(activeTemplates[tplKey] || DEFAULT_TEMPLATES[tplKey], vars);
 }
 
 // --- NAVIGATION & SETTINGS ---
@@ -269,19 +316,31 @@ function renderSettings() {
 }
 
 function renderTemplates() {
-  ['amzx','centralTransport','upsFedex','smallParcel','standardLtl','disputeBol','disputePod','disputeSpd','followup'].forEach(key => {
+  ['amzx','centralTransport','upsFedex','smallParcel','standardLtl','disputeBol','disputePod','disputeSpd','followup','followupPod'].forEach(key => {
     const el = document.getElementById(`tpl-${key}`);
     if (el) el.value = (activeTemplates[key] !== undefined ? activeTemplates[key] : DEFAULT_TEMPLATES[key]) || '';
   });
 }
 
-// Tab switching
+// Tab switching (Carriers vs Templates)
 document.querySelectorAll('.settings-tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.settings-tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById(btn.dataset.tab + 'TabContent').classList.add('active');
+  });
+});
+
+// Sub-tab switching (Templates groups)
+document.querySelectorAll('.tpl-subtab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tplTab;
+    document.querySelectorAll('.tpl-subtab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tpl-tab-content').forEach(c => c.style.display = 'none');
+    
+    btn.classList.add('active');
+    document.getElementById(`tpl-${tab}-content`).style.display = 'block';
   });
 });
 
@@ -304,6 +363,8 @@ function addSettingRow(name = "", email = "") {
     inp.addEventListener('input', doSave);
   });
   container.appendChild(div);
+  div.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  div.querySelector('.inp-name').focus();
 }
 
 document.getElementById('addCarrierBtn').addEventListener('click', () => addSettingRow());
@@ -318,7 +379,7 @@ function doSave() {
   });
   activeCarrierDB = newDB;
 
-  const templateKeys = ['amzx','centralTransport','upsFedex','smallParcel','standardLtl','disputeBol','disputePod','disputeSpd','followup'];
+  const templateKeys = ['amzx','centralTransport','upsFedex','smallParcel','standardLtl','disputeBol','disputePod','disputeSpd','followup', 'followupPod'];
   const newTemplates = {};
   templateKeys.forEach(key => {
     const el = document.getElementById(`tpl-${key}`);
@@ -336,7 +397,7 @@ function doSave() {
 }
 
 // Attach listeners to template textareas for auto-save
-['amzx','centralTransport','upsFedex','smallParcel','standardLtl','disputeBol','disputePod','disputeSpd','followup'].forEach(key => {
+['amzx','centralTransport','upsFedex','smallParcel','standardLtl','disputeBol','disputePod','disputeSpd','followup', 'followupPod'].forEach(key => {
   const el = document.getElementById(`tpl-${key}`);
   if (el) el.addEventListener('input', doSave);
 });
@@ -523,7 +584,7 @@ function parseAmazonData(text, prePickedPO) {
 
   // Picked up logic: Only include if literal text exists (as per request)
   const shipDateRaw = (getVal(/Picked up:\s*\n?(.+)/) || getVal(/Ship date:\s*\n?(.+)/)).trim();
-  const pickedUpLine = shipDateRaw !== "N/A" ? `\nPicked up: ${shipDateRaw}` : "";
+  const pickedUpLine = shipDateRaw !== "N/A" ? `\nPicked up date: ${shipDateRaw}` : "";
   const pickedUpDateLine = shipDateRaw !== "N/A" ? `\nPicked up date: ${shipDateRaw}` : "";
 
   const modeUpper = mode.toUpperCase();
@@ -550,7 +611,7 @@ function parseAmazonData(text, prePickedPO) {
   const vars = { poId, tracking, carrier: carrierRaw, shipFrom, shipTo, asn, arn, docType, pickedUpLine, pickedUpDateLine };
 
   // A. AMAZON MANAGED (AMZX)
-  if (carrierUpper.includes("AMAZON") || carrierUpper.includes("AMZX") || carrierUpper.includes("AMZ LTL") || carrierUpper.includes("AMZR") || carrierUpper.includes("MANO DELIVERY")) {
+  if (carrierUpper.includes("AMAZON") || carrierUpper.includes("AMZX") || carrierUpper.includes("AMZ LTL") || carrierUpper.includes("AMZR") || carrierUpper.includes("MANO DELIVERY") || carrierUpper.includes("AZNG")) {
     isAmz = true;
     templateType = "AMZX Case Creation";
     subject = `BOL REQUEST - PO: ${poId}`;
@@ -559,7 +620,7 @@ function parseAmazonData(text, prePickedPO) {
   // B. CENTRAL TRANSPORT LTL
   else if (carrierUpper.includes("CENTRAL TRANSPORT")) {
     templateType = "Central Transport (LTL)";
-    subject = `${docType} REQUEST for PO ID ${poId}`;
+    subject = `BOL REQUEST for PO ID ${poId}`;
     body = fillTemplate(T.centralTransport || DEFAULT_TEMPLATES.centralTransport, vars);
   }
   // C. UPS / FEDEX Small Parcel — only when mode is PARCEL (UPS Freight LTL/TL falls to standard LTL)
@@ -568,16 +629,16 @@ function parseAmazonData(text, prePickedPO) {
     subject = `POD/BOL REQUEST for PO ID ${poId}`;
     body = fillTemplate(T.upsFedex || DEFAULT_TEMPLATES.upsFedex, vars);
   }
-  // D. GENERIC SMALL PARCEL
-  else if (modeUpper.includes("PARCEL")) {
+  // D. GENERIC SMALL PARCEL / ONTRAC / EMSY
+  else if (modeUpper.includes("PARCEL") || carrierUpper.includes("ONTRAC") || carrierUpper.includes("EMSY")) {
     templateType = "Small Parcel (POD)";
-    subject = `${docType} REQUEST for PO ID ${poId}`;
+    subject = `POD REQUEST for PO ID ${poId}`;
     body = fillTemplate(T.smallParcel || DEFAULT_TEMPLATES.smallParcel, vars);
   }
   // E. GENERIC LTL
   else {
     templateType = "Standard LTL (BOL)";
-    subject = `${docType} REQUEST for PO ID ${poId}`;
+    subject = `BOL REQUEST for PO ID ${poId}`;
     body = fillTemplate(T.standardLtl || DEFAULT_TEMPLATES.standardLtl, vars);
   }
 

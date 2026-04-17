@@ -8,7 +8,7 @@
     const UPS_TRACKING_BTN_ID = 'amz-ups-track-btn';
     const DETAIL_PATH = '/afi-shipment-mgr/shipmentdetail';
     const QUEUE_PATH = '/afi-shipment-mgr/shippingqueue';
-    const DISPUTES_PATH = '/disputes/re/create';
+    const DISPUTES_PATH = '/disputes';
 
     const DISPUTE_DEFAULTS = {
         disputeBol: `Hi,\n\nWe've verified the shipment and confirmed a receipt shortage for PO ID: {poId}\n\nCould you please process a credit for the corresponding invoice to reflect this shortage?\n\nSee attached copy of the signed BOL as your reference confirming that the units were successfully delivered by the carrier.\n\nThanks!`,
@@ -29,7 +29,7 @@
             checkUPSOnPage();
         }
 
-        const isDisputes = url.includes(DISPUTES_PATH);
+        const isDisputes = url.includes(DISPUTES_PATH) && url.includes('/create');
         if (isDisputes) {
             checkDisputePills();
         } else {
@@ -415,9 +415,9 @@
         pill.onmouseover = () => { if (pill.innerText !== 'Copied!') pill.style.backgroundColor = '#1557b0'; };
         pill.onmouseout = () => { if (pill.innerText !== 'Copied!') pill.style.backgroundColor = '#1a73e8'; };
         pill.onclick = () => {
-            chrome.storage.local.get(['templateSettings', 'lastExtractedPO'], (result) => {
+            chrome.storage.local.get(['templateSettings'], (result) => {
                 const templates = result.templateSettings || {};
-                const poId = result.lastExtractedPO || '';
+                const poId = new URL(window.location.href).searchParams.get('lineIds') || '';
                 const raw = templates[templateKey] || DISPUTE_DEFAULTS[templateKey] || '';
                 const text = raw.replace(/\{poId\}/g, poId);
                 navigator.clipboard.writeText(text).then(() => {

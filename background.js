@@ -208,7 +208,7 @@ function parseAmazonData(text, db, prePickedPO) {
     }
   }
 
-  const isAmz = carrierUpper.includes("AMAZON") || carrierUpper.includes("AMZX") || carrierUpper.includes("AMZ LTL") || carrierUpper.includes("AMZR") || carrierUpper.includes("MANO DELIVERY");
+  const isAmz = carrierUpper.includes("AMAZON") || carrierUpper.includes("AMZX") || carrierUpper.includes("AMZ LTL") || carrierUpper.includes("AMZR") || carrierUpper.includes("MANO DELIVERY") || carrierUpper.includes("AZNG");
   let subject = "";
   let body = "";
 

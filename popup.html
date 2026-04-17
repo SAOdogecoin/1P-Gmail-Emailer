@@ -338,6 +338,47 @@
     .tab-content { display: none; }
     .tab-content.active { display: block; }
 
+    /* ── SUB TABS (Templates) ───────────────────────────── */
+    .sub-tabs {
+      display: flex;
+      background: hsl(var(--muted));
+      border-radius: 6px;
+      padding: 2px;
+      gap: 2px;
+      margin-bottom: 12px;
+    }
+    .tpl-subtab-btn {
+      flex: 1;
+      padding: 5px;
+      border: none;
+      background: transparent;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: hsl(var(--muted-foreground));
+      cursor: pointer;
+      transition: all 0.1s;
+      font-family: 'Inter', sans-serif;
+    }
+    .tpl-subtab-btn.active, .fu-type-btn.active {
+      background: white;
+      color: hsl(var(--foreground));
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .fu-type-btn {
+      flex: 1;
+      padding: 5px;
+      border: none;
+      background: transparent;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: hsl(var(--muted-foreground));
+      cursor: pointer;
+      transition: all 0.1s;
+      font-family: 'Inter', sans-serif;
+    }
+
     /* ── CARRIER ROWS ────────────────────────────────────── */
     .settings-row { display: flex; gap: 6px; margin-bottom: 6px; }
     .settings-row input {
@@ -488,6 +529,7 @@
       align-items: center;
       gap: 4px;
     }
+
   </style>
 </head>
 <body>
@@ -557,12 +599,16 @@
       </div>
     </div>
 
-    <!-- FOLLOW UP TAB -->
     <div id="followupTabContent" class="main-tab-content" style="display:none;">
       <div class="container">
         <div>
-          <span class="label">Paste Original BOL Request Email</span>
+          <span class="label">Paste Original Request Email</span>
           <textarea id="followupInput" placeholder="Paste the original email you sent..."></textarea>
+        </div>
+
+        <div class="sub-tabs" style="margin-bottom: 2px;">
+          <button class="fu-type-btn active" data-fu-type="bol">BOL Follow-up</button>
+          <button class="fu-type-btn" data-fu-type="pod">POD Follow-up</button>
         </div>
 
         <div id="followupCard" class="card">
@@ -637,20 +683,37 @@
 
       <!-- Templates Tab -->
       <div id="templatesTabContent" class="tab-content">
-        <div class="tpl-section-title">Email / Gmail Templates</div>
-        <p class="tpl-vars">{poId} {tracking} {carrier} {shipFrom} {shipTo} {asn} {arn} {docType} {pickedUpLine} {pickedUpDateLine}</p>
-        <div class="tpl-row"><span class="tpl-label">AMZX Case</span><textarea class="tpl-input" id="tpl-amzx"></textarea></div>
-        <div class="tpl-row"><span class="tpl-label">Central Transport (LTL)</span><textarea class="tpl-input" id="tpl-centralTransport"></textarea></div>
-        <div class="tpl-row"><span class="tpl-label">UPS / FedEx</span><textarea class="tpl-input" id="tpl-upsFedex"></textarea></div>
-        <div class="tpl-row"><span class="tpl-label">Small Parcel (Generic)</span><textarea class="tpl-input" id="tpl-smallParcel"></textarea></div>
-        <div class="tpl-row"><span class="tpl-label">Standard LTL (Generic)</span><textarea class="tpl-input" id="tpl-standardLtl"></textarea></div>
-        <div class="tpl-section-title">Follow-Up Template</div>
-        <p class="tpl-vars">{poId} {pro} {pickupLine} {shipFrom} {shipTo}</p>
-        <div class="tpl-row"><span class="tpl-label">BOL Follow-Up</span><textarea class="tpl-input" id="tpl-followup" style="min-height:110px;"></textarea></div>
-        <div class="tpl-section-title">Dispute Templates</div>
-        <div class="tpl-row"><span class="tpl-label">BOL / LTL</span><textarea class="tpl-input" id="tpl-disputeBol"></textarea></div>
-        <div class="tpl-row"><span class="tpl-label">POD / Small Parcel</span><textarea class="tpl-input" id="tpl-disputePod"></textarea></div>
-        <div class="tpl-row"><span class="tpl-label">No Attachment / SPD</span><textarea class="tpl-input" id="tpl-disputeSpd"></textarea></div>
+        <!-- Sub-tabs for Templates -->
+        <div class="sub-tabs">
+          <button class="tpl-subtab-btn active" data-tpl-tab="gmail">Gmail</button>
+          <button class="tpl-subtab-btn" data-tpl-tab="dispute">Dispute</button>
+          <button class="tpl-subtab-btn" data-tpl-tab="followup">Follow Up</button>
+        </div>
+
+        <div id="tpl-gmail-content" class="tpl-tab-content active">
+          <div class="tpl-section-title">Email / Gmail Templates</div>
+          <p class="tpl-vars">{poId} {tracking} {carrier} {shipFrom} {shipTo} {asn} {arn} {docType} {pickedUpLine} {pickedUpDateLine}</p>
+          <div class="tpl-row"><span class="tpl-label">AMZX Case</span><textarea class="tpl-input" id="tpl-amzx"></textarea></div>
+          <div class="tpl-row"><span class="tpl-label">Central Transport (LTL)</span><textarea class="tpl-input" id="tpl-centralTransport"></textarea></div>
+          <div class="tpl-row"><span class="tpl-label">UPS / FedEx</span><textarea class="tpl-input" id="tpl-upsFedex"></textarea></div>
+          <div class="tpl-row"><span class="tpl-label">Small Parcel (Generic)</span><textarea class="tpl-input" id="tpl-smallParcel"></textarea></div>
+          <div class="tpl-row"><span class="tpl-label">Standard LTL (Generic)</span><textarea class="tpl-input" id="tpl-standardLtl"></textarea></div>
+        </div>
+
+        <div id="tpl-dispute-content" class="tpl-tab-content" style="display:none;">
+          <div class="tpl-section-title">Dispute Templates</div>
+          <p class="tpl-vars">{poId}</p>
+          <div class="tpl-row"><span class="tpl-label">BOL / LTL</span><textarea class="tpl-input" id="tpl-disputeBol"></textarea></div>
+          <div class="tpl-row"><span class="tpl-label">POD / Small Parcel</span><textarea class="tpl-input" id="tpl-disputePod"></textarea></div>
+          <div class="tpl-row"><span class="tpl-label">No Attachment / SPD</span><textarea class="tpl-input" id="tpl-disputeSpd"></textarea></div>
+        </div>
+
+        <div id="tpl-followup-content" class="tpl-tab-content" style="display:none;">
+          <div class="tpl-section-title">Follow-Up Templates</div>
+          <p class="tpl-vars">{poId} {pro} {pickupLine} {shipFrom} {shipTo} {carrier}</p>
+          <div class="tpl-row"><span class="tpl-label">BOL Follow-Up</span><textarea class="tpl-input" id="tpl-followup" style="min-height:140px;"></textarea></div>
+          <div class="tpl-row"><span class="tpl-label">POD Follow-Up</span><textarea class="tpl-input" id="tpl-followupPod" style="min-height:140px;"></textarea></div>
+        </div>
       </div>
     </div>
   </div>
