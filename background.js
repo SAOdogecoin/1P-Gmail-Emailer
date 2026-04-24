@@ -143,43 +143,52 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     // Delete immediately — SPA fires multiple 'complete' events, only process once
     upsTrackedTabs.delete(tabId);
 
-    // Small delay for Angular SPA to render
+    // Delay for Angular SPA to render fully
     setTimeout(() => {
         chrome.scripting.executeScript({
             target: { tabId },
             func: handleUpsPage
         }).catch(() => {});
-    }, 2000);
+    }, 3500);
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => upsTrackedTabs.delete(tabId));
 
 // Injected into UPS page — handles both list page and detail page
 function handleUpsPage() {
-    // List page: has multiple tracking-number links
-    const trackLinks = Array.from(document.querySelectorAll('a[href*="tracknum="]'))
-        .filter(a => /1Z[A-Z0-9]{16}/i.test((a.textContent || '').trim()));
-
-    if (trackLinks.length > 0) {
-        // Send hrefs back to background — it will open each in a tracked tab
-        chrome.runtime.sendMessage({
-            action: 'openUpsDetailTabs',
-            hrefs: trackLinks.map(a => a.href)
-        });
-        return;
+    // Helper: find tracking links by href (simpler than textContent regex)
+    function getTrackLinks() {
+        return Array.from(document.querySelectorAll('a[href*="ups.com/track"][href*="tracknum=1Z"]'));
     }
 
-    // Detail page: poll for POD link and click it
-    let attempts = 0;
-    const poll = setInterval(() => {
-        const pod = document.getElementById('stApp_btnProofOfDeliveryonDetails')
-            || Array.from(document.querySelectorAll('a.ups-link'))
-                   .find(a => /proof of delivery/i.test(a.textContent));
-        if (pod) {
-            clearInterval(poll);
-            pod.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    // Retry loop — Angular may still be rendering at injection time
+    let listAttempts = 0;
+    const listPoll = setInterval(() => {
+        const trackLinks = getTrackLinks();
+        if (trackLinks.length > 0) {
+            clearInterval(listPoll);
+            chrome.runtime.sendMessage({
+                action: 'openUpsDetailTabs',
+                hrefs: trackLinks.map(a => a.href)
+            });
+            return;
         }
-        if (++attempts > 40) clearInterval(poll); // ~20s timeout
+
+        // After ~5s with no list links found, assume we're on a detail page — switch to POD poll
+        if (++listAttempts >= 10) {
+            clearInterval(listPoll);
+            let podAttempts = 0;
+            const podPoll = setInterval(() => {
+                const pod = document.getElementById('stApp_btnProofOfDeliveryonDetails')
+                    || Array.from(document.querySelectorAll('a.ups-link'))
+                           .find(a => /proof of delivery/i.test(a.textContent));
+                if (pod) {
+                    clearInterval(podPoll);
+                    pod.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                }
+                if (++podAttempts > 40) clearInterval(podPoll);
+            }, 500);
+        }
     }, 500);
 }
 
