@@ -5,6 +5,8 @@
 
 // Track UPS tabs opened by this extension so onUpdated only acts on ours
 const upsTrackedTabs = new Set();
+// Pending POD print: set just before POD link is clicked, consumed by next UPS tab load
+let pendingPodPrint = null;
 
 const DEFAULT_DB = {
   "UPS": "preferred.us@ups.com; gfaubion@ups.com",
@@ -92,6 +94,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ ok: true });
         return true;
     }
+    if (message.action === "upsPodAboutToClick") {
+        // Arm the POD tab catcher — expires in 15s
+        pendingPodPrint = { trackingId: message.trackingId, expiry: Date.now() + 15000 };
+        sendResponse({ ok: true });
+        return true;
+    }
     if (message.action === "openUpsDetailTabs") {
         // Fired by handleUpsPage when it finds a list of tracking links
         (message.hrefs || []).forEach((href, i) => {
@@ -143,28 +151,66 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     // Delete immediately — SPA fires multiple 'complete' events, only process once
     upsTrackedTabs.delete(tabId);
 
-    // Delay for Angular SPA to render fully
+    // Detail page (tracknum=1Z...) renders faster than list page
+    const isDetailUrl = /tracknum=1Z/i.test(tab.url);
     setTimeout(() => {
         chrome.scripting.executeScript({
             target: { tabId },
             func: handleUpsPage
         }).catch(() => {});
-    }, 3500);
+    }, isDetailUrl ? 1500 : 3500);
+});
+
+// Catch POD tab (opened by clicking POD link) — not in upsTrackedTabs
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.status !== 'complete') return;
+    if (upsTrackedTabs.has(tabId)) return; // handled by the other listener
+    if (!pendingPodPrint) return;
+    if (Date.now() > pendingPodPrint.expiry) { pendingPodPrint = null; return; }
+    if (!tab.url || !tab.url.includes('ups.com')) return;
+
+    const { trackingId } = pendingPodPrint;
+    pendingPodPrint = null;
+
+    // Give POD page time to render, then print to PDF
+    setTimeout(() => printTabAsPdf(tabId, trackingId), 2500);
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => upsTrackedTabs.delete(tabId));
 
 // Injected into UPS page — handles both list page and detail page
 function handleUpsPage() {
-    // Helper: find tracking links by href (simpler than textContent regex)
-    function getTrackLinks() {
-        return Array.from(document.querySelectorAll('a[href*="ups.com/track"][href*="tracknum=1Z"]'));
+    const isDetailUrl = /tracknum=1Z/i.test(location.href);
+    const trackingId = (location.href.match(/tracknum=(1Z[A-Z0-9]+)/i) || [])[1] || '';
+
+    function startPodPoll() {
+        let podAttempts = 0;
+        const podPoll = setInterval(() => {
+            const pod = document.getElementById('stApp_btnProofOfDeliveryonDetails')
+                || Array.from(document.querySelectorAll('a.ups-link'))
+                       .find(a => /proof of delivery/i.test(a.textContent));
+            if (pod) {
+                clearInterval(podPoll);
+                // Tell background to expect a new POD tab for this tracking ID
+                chrome.runtime.sendMessage({ action: 'upsPodAboutToClick', trackingId });
+                setTimeout(() => {
+                    pod.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                }, 300);
+            }
+            if (++podAttempts > 60) clearInterval(podPoll); // ~18s timeout
+        }, 300);
     }
 
-    // Retry loop — Angular may still be rendering at injection time
+    if (isDetailUrl) {
+        // Skip list poll — go straight to POD
+        startPodPoll();
+        return;
+    }
+
+    // List page: retry loop for Angular render
     let listAttempts = 0;
     const listPoll = setInterval(() => {
-        const trackLinks = getTrackLinks();
+        const trackLinks = Array.from(document.querySelectorAll('a[href*="ups.com/track"][href*="tracknum=1Z"]'));
         if (trackLinks.length > 0) {
             clearInterval(listPoll);
             chrome.runtime.sendMessage({
@@ -173,23 +219,36 @@ function handleUpsPage() {
             });
             return;
         }
-
-        // After ~5s with no list links found, assume we're on a detail page — switch to POD poll
+        // After ~5s no list links — fall through to POD poll
         if (++listAttempts >= 10) {
             clearInterval(listPoll);
-            let podAttempts = 0;
-            const podPoll = setInterval(() => {
-                const pod = document.getElementById('stApp_btnProofOfDeliveryonDetails')
-                    || Array.from(document.querySelectorAll('a.ups-link'))
-                           .find(a => /proof of delivery/i.test(a.textContent));
-                if (pod) {
-                    clearInterval(podPoll);
-                    pod.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
-                }
-                if (++podAttempts > 40) clearInterval(podPoll);
-            }, 500);
+            startPodPoll();
         }
     }, 500);
+}
+
+function printTabAsPdf(tabId, trackingId) {
+    const filename = (trackingId || 'POD') + '.pdf';
+    chrome.debugger.attach({ tabId }, '1.3', () => {
+        if (chrome.runtime.lastError) return;
+        chrome.debugger.sendCommand({ tabId }, 'Page.printToPDF', {
+            printBackground: false,
+            paperWidth: 8.5,
+            paperHeight: 11,
+            marginTop: 0.4, marginBottom: 0.4,
+            marginLeft: 0.4, marginRight: 0.4,
+            transferMode: 'ReturnAsBase64'
+        }, (result) => {
+            chrome.debugger.detach({ tabId });
+            if (result && result.data) {
+                chrome.downloads.download({
+                    url: 'data:application/pdf;base64,' + result.data,
+                    filename,
+                    saveAs: true
+                });
+            }
+        });
+    });
 }
 
 function routeAction(data) {
