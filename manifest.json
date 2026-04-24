@@ -3,8 +3,8 @@
   "name": "1P Gmail Emailer",
   "version": "1.5",
   "description": "Automate Gmail emails for Amazon 1P Audits",
-  "permissions": ["activeTab", "scripting", "storage", "tabs", "clipboardWrite"],
-  "host_permissions": ["*://mail.google.com/*", "*://vendorcentral.amazon.com/*", "https://raw.githubusercontent.com/*"],
+  "permissions": ["activeTab", "scripting", "storage", "tabs", "clipboardWrite", "debugger", "downloads"],
+  "host_permissions": ["*://mail.google.com/*", "*://vendorcentral.amazon.com/*", "https://raw.githubusercontent.com/*", "*://www.ups.com/*", "*://www.estes-express.com/*"],
   "background": {
     "service_worker": "background.js"
   },
@@ -24,6 +24,16 @@
         "*://vendorcentral.amazon.com.mx/*"
       ],
       "js": ["content.js"]
+    },
+    {
+      "matches": ["*://www.ups.com/*"],
+      "js": ["ups-content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://www.estes-express.com/myestes/document-retrieval*"],
+      "js": ["estes-content.js"],
+      "run_at": "document_idle"
     }
   ]
 }

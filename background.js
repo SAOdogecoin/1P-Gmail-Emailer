@@ -3,6 +3,9 @@
    Automates the find/open Gmail flow upon click in content script
 */
 
+// Track UPS tabs opened by this extension so onUpdated only acts on ours
+const upsTrackedTabs = new Set();
+
 const DEFAULT_DB = {
   "UPS": "preferred.us@ups.com; gfaubion@ups.com",
   "FEDEX": "N/A", 
@@ -41,6 +44,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             const db = result.carrierSettings || DEFAULT_DB;
             const data = parseAmazonData(message.text, db, finalPO);
 
+            // Merge multi-PRO list from content script (shadow DOM scan)
+            if (Array.isArray(message.trackingAll) && message.trackingAll.length) {
+                data.trackingAll = message.trackingAll;
+                if ((!data.tracking || data.tracking === "N/A") && message.trackingAll[0]) {
+                    data.tracking = message.trackingAll[0];
+                }
+                // Patch email body: replace single tracking line with all IDs
+                if (data.isUps && data.trackingAll.length > 1 && data.body) {
+                    const allLines = data.trackingAll.join('\n');
+                    data.body = data.body.replace(/Tracking Number: [^\n]*/,
+                        `Tracking Numbers:\n${allLines}`);
+                }
+            }
+
+            // manualEmail=true: user clicked "Create Email" — always compose Gmail, skip UPS/Estes routing
+            if (message.manualEmail) {
+                if (data.isAmz && sender.tab) {
+                    chrome.scripting.executeScript({
+                        target: { tabId: sender.tab.id },
+                        func: (bodyText) => navigator.clipboard.writeText(bodyText),
+                        args: [data.body]
+                    });
+                    focusOrOpenContactTab(data.body);
+                } else {
+                    automateGmailCompose(data);
+                }
+                sendResponse({ isAmz: data.isAmz, isEstes: data.isEstes, isUps: data.isUps, tracking: data.tracking });
+                return;
+            }
+
             if (data.isAmz && sender.tab) {
                 chrome.scripting.executeScript({
                     target: { tabId: sender.tab.id },
@@ -59,7 +92,93 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ ok: true });
         return true;
     }
+    if (message.action === "openUpsDetailTabs") {
+        // Fired by handleUpsPage when it finds a list of tracking links
+        (message.hrefs || []).forEach((href, i) => {
+            setTimeout(() => {
+                chrome.tabs.create({ url: href }, (t) => {
+                    if (t) upsTrackedTabs.add(t.id);
+                });
+            }, i * 600);
+        });
+        sendResponse({ ok: true });
+        return true;
+    }
+    if (message.action === "printPodAsPdf") {
+        const tabId = sender.tab.id;
+        const filename = (message.trackNum || 'POD') + '.pdf';
+        chrome.debugger.attach({ tabId }, "1.3", () => {
+            if (chrome.runtime.lastError) return;
+            chrome.debugger.sendCommand({ tabId }, "Page.printToPDF", {
+                printBackground: false,
+                paperWidth: 8.5,
+                paperHeight: 11,
+                marginTop: 0.4,
+                marginBottom: 0.4,
+                marginLeft: 0.4,
+                marginRight: 0.4,
+                transferMode: "ReturnAsBase64"
+            }, (result) => {
+                chrome.debugger.detach({ tabId });
+                if (result && result.data) {
+                    chrome.downloads.download({
+                        url: 'data:application/pdf;base64,' + result.data,
+                        filename: filename,
+                        saveAs: true
+                    });
+                }
+            });
+        });
+        sendResponse({ ok: true });
+        return true;
+    }
 });
+
+// Fire on any tab update — only act on UPS tabs we opened
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.status !== 'complete') return;
+    if (!upsTrackedTabs.has(tabId)) return;
+    if (!tab.url || !tab.url.includes('ups.com')) return;
+
+    // Small delay for Angular SPA to render
+    setTimeout(() => {
+        chrome.scripting.executeScript({
+            target: { tabId },
+            func: handleUpsPage
+        }).catch(() => {});
+    }, 2000);
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => upsTrackedTabs.delete(tabId));
+
+// Injected into UPS page — handles both list page and detail page
+function handleUpsPage() {
+    // List page: has multiple tracking-number links
+    const trackLinks = Array.from(document.querySelectorAll('a[href*="tracknum="]'))
+        .filter(a => /1Z[A-Z0-9]{16}/i.test((a.textContent || '').trim()));
+
+    if (trackLinks.length > 0) {
+        // Send hrefs back to background — it will open each in a tracked tab
+        chrome.runtime.sendMessage({
+            action: 'openUpsDetailTabs',
+            hrefs: trackLinks.map(a => a.href)
+        });
+        return;
+    }
+
+    // Detail page: poll for POD link and click it
+    let attempts = 0;
+    const poll = setInterval(() => {
+        const pod = document.getElementById('stApp_btnProofOfDeliveryonDetails')
+            || Array.from(document.querySelectorAll('a.ups-link'))
+                   .find(a => /proof of delivery/i.test(a.textContent));
+        if (pod) {
+            clearInterval(poll);
+            pod.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        }
+        if (++attempts > 40) clearInterval(poll); // ~20s timeout
+    }, 500);
+}
 
 function routeAction(data) {
     if (data.isAmz) {
@@ -67,23 +186,25 @@ function routeAction(data) {
     } else if (data.isEstes && data.tracking && data.tracking !== "N/A") {
         chrome.tabs.create({ url: `https://www.estes-express.com/myestes/shipment-tracking/?query=${data.tracking}&type=PRO` });
     } else if (data.isUps && data.tracking && data.tracking !== "N/A") {
-        chrome.tabs.create({ url: `https://www.ups.com/track?loc=en_US&tracknum=${data.tracking}` }, (newTab) => {
-            // Wait for page to load, then click POD link if present
-            const poll = setInterval(() => {
-                chrome.tabs.get(newTab.id, (tab) => {
-                    if (!tab) { clearInterval(poll); return; }
-                    if (tab.status === 'complete') {
-                        clearInterval(poll);
-                        setTimeout(() => {
-                            chrome.scripting.executeScript({
-                                target: { tabId: newTab.id },
-                                func: clickUpsPod
-                            }).catch(() => {});
-                        }, 2500);
-                    }
+        const allTracking = (data.trackingAll && data.trackingAll.length) ? data.trackingAll : [data.tracking];
+        if (allTracking.length > 1) {
+            // Bulk paste flow: one tab, paste all PROs, click Track
+            // Set storage FIRST — content script reads it on load (race-safe via callback)
+            chrome.storage.local.set({
+                upsBulkTrackingList: allTracking,
+                upsPoId: data.poId || ''
+            }, () => {
+                chrome.tabs.create({ url: `https://www.ups.com/track?loc=en_US&tracknum=${allTracking.length}&requester=ST/` }, (t) => {
+                    if (t) upsTrackedTabs.add(t.id);
                 });
-            }, 500);
-        });
+            });
+        } else {
+            chrome.storage.local.set({ upsPending: 1, upsPoId: data.poId || '' }, () => {
+                chrome.tabs.create({ url: `https://www.ups.com/track?loc=en_US&tracknum=${allTracking[0]}` }, (t) => {
+                    if (t) upsTrackedTabs.add(t.id);
+                });
+            });
+        }
     } else if (data.email && data.email !== "N/A") {
         automateGmailCompose(data);
     }
@@ -108,19 +229,6 @@ function focusOrOpenContactTab(bodyText) {
     });
 }
 
-// Injected into UPS tracking page to auto-click the Proof of Delivery link
-function clickUpsPod() {
-    let attempts = 0;
-    const poll = setInterval(() => {
-        const el = document.getElementById('stApp_btnProofOfDeliveryonDetails')
-            || Array.from(document.querySelectorAll('a.ups-link')).find(a => /proof of delivery/i.test(a.innerText));
-        if (el) {
-            clearInterval(poll);
-            el.click();
-        }
-        if (++attempts > 30) clearInterval(poll); // ~15s timeout
-    }, 500);
-}
 
 function automateGmailCompose(data) {
     chrome.tabs.query({ url: "*://mail.google.com/*" }, (tabs) => {
@@ -231,6 +339,8 @@ function parseAmazonData(text, db, prePickedPO) {
   let tracking = getVal(/Carrier tracking.*PRO.*:\s*\n?([A-Z0-9]+)/i);
   if (tracking === "N/A") tracking = getVal(/Carrier tracking[^:\n]*:\s*\n?([A-Z0-9]+)/i);
   if (tracking === "N/A") tracking = getVal(/Tracking[^:\n]*(?:number|#|ID)[^:\n]*:\s*\n?([A-Z0-9]+)/i);
+  // Sanitize garbage words (e.g. "Ship", "Date") caught by loose regex
+  if (tracking !== "N/A" && /^(ship|date|from|to|at|by|on|in|via|a|an|the|n)$/i.test(tracking)) tracking = "N/A";
   const mode = getVal(/Mode:\s*\n?(.+)/);
   const poMatch = text.match(/\bPurchase order\b[\s\S]{0,1000}?\b([A-Z0-9]*\d[A-Z0-9]{6,11})\b/i);
   let poId = prePickedPO || (poMatch ? poMatch[1] : "N/A");
@@ -253,16 +363,18 @@ function parseAmazonData(text, db, prePickedPO) {
   const modeUpper = mode.toUpperCase();
   let docType = (modeUpper.includes("PARCEL")) ? "POD" : "BOL";
 
-  const carrierUpper = carrierRaw.toUpperCase();
+  const carrierUpper = carrierRaw.toUpperCase().replace(/\s*&\s*/g, ' AND ').replace(/\s+/g, ' ').trim();
   let email = "N/A";
   for (const [key, val] of Object.entries(db)) {
-    if (carrierUpper.includes(key)) {
+    const normKey = key.toUpperCase().replace(/\s*&\s*/g, ' AND ').replace(/\s+/g, ' ').trim();
+    if (carrierUpper.includes(normKey)) {
       email = val;
       break;
     }
   }
 
-  const isAmz = carrierUpper.includes("AMAZON") || carrierUpper.includes("AMZX") || carrierUpper.includes("AMZ LTL") || carrierUpper.includes("AMZR") || carrierUpper.includes("MANO DELIVERY") || carrierUpper.includes("AZNG");
+  const isAmz = (carrierUpper.includes("AMAZON") || carrierUpper.includes("AMZX") || carrierUpper.includes("AMZ LTL") || carrierUpper.includes("AMZR") || carrierUpper.includes("MANO DELIVERY") || carrierUpper.includes("AZNG"))
+    && !carrierUpper.includes("AMAZONFRESH");
   let subject = "";
   let body = "";
 
@@ -284,7 +396,7 @@ function parseAmazonData(text, db, prePickedPO) {
   }
 
   const isEstes = carrierUpper.includes("ESTES") || carrierUpper.includes("EXLA");
-  const isUps = carrierUpper.includes("UPS") || carrierUpper.includes("UPSN");
+  const isUps = carrierUpper.includes("UPS") || carrierUpper.includes("UPSN") || carrierUpper.includes("AMAZONFRESH");
 
   return { isAmz, isEstes, isUps, tracking, email, subject, body, poId };
 }
