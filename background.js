@@ -3,8 +3,8 @@
    Automates the find/open Gmail flow upon click in content script
 */
 
-// Track UPS tabs opened by this extension so onUpdated only acts on ours
-const upsTrackedTabs = new Set();
+// Map<tabId, isSingle> — true = single tracking ID (print POD), false = bulk (skip print)
+const upsTrackedTabs = new Map();
 // Pending POD print: set just before POD link is clicked, consumed by next UPS tab load
 let pendingPodPrint = null;
 
@@ -101,11 +101,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
     if (message.action === "openUpsDetailTabs") {
-        // Fired by handleUpsPage when it finds a list of tracking links
+        // Fired by handleUpsPage when it finds a list of tracking links — bulk, no print
         (message.hrefs || []).forEach((href, i) => {
             setTimeout(() => {
                 chrome.tabs.create({ url: href }, (t) => {
-                    if (t) upsTrackedTabs.add(t.id);
+                    if (t) upsTrackedTabs.set(t.id, false); // bulk = no print
                 });
             }, i * 600);
         });
@@ -149,6 +149,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (!tab.url || !tab.url.includes('ups.com')) return;
 
     // Delete immediately — SPA fires multiple 'complete' events, only process once
+    const isSingle = upsTrackedTabs.get(tabId);
     upsTrackedTabs.delete(tabId);
 
     // Detail page (tracknum=1Z...) renders faster than list page
@@ -156,7 +157,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     setTimeout(() => {
         chrome.scripting.executeScript({
             target: { tabId },
-            func: handleUpsPage
+            func: handleUpsPage,
+            args: [isSingle]
         }).catch(() => {});
     }, isDetailUrl ? 1500 : 3500);
 });
@@ -199,7 +201,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 chrome.tabs.onRemoved.addListener((tabId) => upsTrackedTabs.delete(tabId));
 
 // Injected into UPS page — handles both list page and detail page
-function handleUpsPage() {
+// isSingle: true = single tracking ID flow (print POD), false = bulk (just click POD, no print)
+function handleUpsPage(isSingle) {
     const isDetailUrl = /tracknum=1Z/i.test(location.href);
     const trackingId = (location.href.match(/tracknum=(1Z[A-Z0-9]+)/i) || [])[1] || '';
 
@@ -211,8 +214,10 @@ function handleUpsPage() {
                        .find(a => /proof of delivery/i.test(a.textContent));
             if (pod) {
                 clearInterval(podPoll);
-                // Tell background to expect a new POD tab for this tracking ID
-                chrome.runtime.sendMessage({ action: 'upsPodAboutToClick', trackingId });
+                if (isSingle) {
+                    // Single mode: arm print before clicking POD
+                    chrome.runtime.sendMessage({ action: 'upsPodAboutToClick', trackingId });
+                }
                 setTimeout(() => {
                     pod.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
                 }, 300);
@@ -286,13 +291,13 @@ function routeAction(data) {
                 upsPoId: data.poId || ''
             }, () => {
                 chrome.tabs.create({ url: `https://www.ups.com/track?loc=en_US&tracknum=${allTracking.length}&requester=ST/` }, (t) => {
-                    if (t) upsTrackedTabs.add(t.id);
+                    if (t) upsTrackedTabs.set(t.id, false); // bulk list page — no print
                 });
             });
         } else {
             chrome.storage.local.set({ upsPending: 1, upsPoId: data.poId || '' }, () => {
                 chrome.tabs.create({ url: `https://www.ups.com/track?loc=en_US&tracknum=${allTracking[0]}` }, (t) => {
-                    if (t) upsTrackedTabs.add(t.id);
+                    if (t) upsTrackedTabs.set(t.id, true); // single — print POD
                 });
             });
         }
