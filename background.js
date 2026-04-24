@@ -172,8 +172,28 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     const { trackingId } = pendingPodPrint;
     pendingPodPrint = null;
 
-    // Give POD page time to render, then print to PDF
-    setTimeout(() => printTabAsPdf(tabId, trackingId), 2500);
+    // Wait for POD page to render, click Print button (suppressing native dialog), then save PDF
+    setTimeout(() => {
+        chrome.scripting.executeScript({
+            target: { tabId },
+            func: () => {
+                // Suppress native print dialog — we'll save via debugger API instead
+                window.print = () => {};
+                let attempts = 0;
+                const poll = setInterval(() => {
+                    const btn = document.getElementById('stApp_POD_btnPrint');
+                    if (btn) {
+                        clearInterval(poll);
+                        btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                    }
+                    if (++attempts > 20) clearInterval(poll);
+                }, 300);
+            }
+        }).then(() => {
+            // After button click runs, give Angular a moment then save via debugger
+            setTimeout(() => printTabAsPdf(tabId, trackingId), 1000);
+        }).catch(() => printTabAsPdf(tabId, trackingId));
+    }, 2500);
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => upsTrackedTabs.delete(tabId));
