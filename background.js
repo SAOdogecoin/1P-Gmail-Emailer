@@ -140,6 +140,9 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (!upsTrackedTabs.has(tabId)) return;
     if (!tab.url || !tab.url.includes('ups.com')) return;
 
+    // Delete immediately — SPA fires multiple 'complete' events, only process once
+    upsTrackedTabs.delete(tabId);
+
     // Small delay for Angular SPA to render
     setTimeout(() => {
         chrome.scripting.executeScript({
